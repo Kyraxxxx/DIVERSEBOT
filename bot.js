@@ -14,14 +14,12 @@ const {
 } = require('discord.js');
 const express = require('express');
 
-// Puxa direto do painel Environment da Render
+// Apenas TOKEN, CLIENT_ID e GUILD_ID na Render
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
-const CATEGORY_TICKET_ID = process.env.CATEGORY_TICKET_ID;
-const ROLE_STAFF_ID = process.env.ROLE_STAFF_ID;
 
-// Servidor HTTP para a Render não derrubar o bot por inatividade
+// Web server para a Render manter ligado
 const app = express();
 app.get('/', (req, res) => res.send('Bot Online!'));
 app.listen(process.env.PORT || 3000);
@@ -46,7 +44,7 @@ const CORES = {
 const commands = [
     new SlashCommandBuilder()
         .setName('painel-ticket')
-        .setDescription('Envia o painel de suporte/compras')
+        .setDescription('Envia o painel de suporte no canal onde foi usado')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     new SlashCommandBuilder()
@@ -83,7 +81,7 @@ client.once('ready', async () => {
             Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
             { body: commands }
         );
-        console.log('✅ Comandos / registrados na Render!');
+        console.log('✅ Comandos registrados!');
     } catch (err) {
         console.error('❌ Erro no registro de comandos:', err);
     }
@@ -113,8 +111,9 @@ client.on('interactionCreate', async (interaction) => {
 
             const row = new ActionRowBuilder().addComponents(menu);
 
+            // Envia no próprio canal onde rodou o comando
             await interaction.channel.send({ embeds: [embed], components: [row] });
-            return interaction.reply({ content: '✅ Painel enviado!', ephemeral: true });
+            return interaction.reply({ content: '✅ Painel de tickets enviado aqui!', ephemeral: true });
         }
 
         if (commandName === 'falar') {
@@ -155,20 +154,33 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.deferReply({ ephemeral: true });
 
         try {
+            // Criado na mesma categoria do canal onde o painel está
+            const parentCategory = interaction.channel.parentId;
+
             const canalTicket = await interaction.guild.channels.create({
                 name: nomeCanal,
                 type: ChannelType.GuildText,
-                parent: CATEGORY_TICKET_ID || null,
+                parent: parentCategory || null,
                 permissionOverwrites: [
-                    { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-                    { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles] },
-                    { id: ROLE_STAFF_ID, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles] }
+                    { 
+                        id: interaction.guild.id, 
+                        deny: [PermissionFlagsBits.ViewChannel] 
+                    },
+                    { 
+                        id: interaction.user.id, 
+                        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles] 
+                    },
+                    // Concede acesso aos membros que têm permissão de Gerenciar Canais no servidor (Staff)
+                    {
+                        id: interaction.guild.roles.cache.find(r => r.permissions.has(PermissionFlagsBits.ManageChannels))?.id || interaction.guild.id,
+                        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles]
+                    }
                 ]
             });
 
             const embedTicket = new EmbedBuilder()
                 .setTitle(`🎫 Atendimento - ${tipo.toUpperCase()}`)
-                .setDescription(`Olá ${interaction.user}, bem-vindo ao seu ticket!\n\nExplique o que você precisa. A equipe <@&${ROLE_STAFF_ID}> responderá em breve.`)
+                .setDescription(`Olá ${interaction.user}, bem-vindo ao seu ticket!\n\nDescreva detalhadamente o que você precisa e aguarde o atendimento da equipe.`)
                 .setColor(CORES.ROXO)
                 .setTimestamp();
 
@@ -180,12 +192,12 @@ client.on('interactionCreate', async (interaction) => {
 
             const row = new ActionRowBuilder().addComponents(btnFechar);
 
-            await canalTicket.send({ content: `${interaction.user} | <@&${ROLE_STAFF_ID}>`, embeds: [embedTicket], components: [row] });
+            await canalTicket.send({ content: `${interaction.user}`, embeds: [embedTicket], components: [row] });
             await interaction.editReply({ content: `✅ Ticket criado: ${canalTicket}` });
 
         } catch (err) {
             console.error('Erro ticket:', err);
-            await interaction.editReply({ content: '❌ Erro ao criar o canal. Verifique os IDs na Render e as permissões do bot.' });
+            await interaction.editReply({ content: '❌ Erro ao criar o canal. Verifique as permissões do bot.' });
         }
     }
 
