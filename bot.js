@@ -18,7 +18,6 @@ const express = require('express');
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 
-// Servidor HTTP para manter o bot ativo na Render
 const app = express();
 app.get('/', (req, res) => res.send('Bot Online!'));
 app.listen(process.env.PORT || 3000);
@@ -99,6 +98,8 @@ client.on('interactionCreate', async (interaction) => {
 
         // /painel-ticket
         if (commandName === 'painel-ticket') {
+            await interaction.deferReply({ ephemeral: true });
+
             const embed = new EmbedBuilder()
                 .setTitle('🎨 Central de Atendimento & Vendas')
                 .setDescription('Seja bem-vindo(a) à nossa loja!\n\nPara iniciar o seu atendimento, selecione abaixo o departamento correspondente à sua solicitação.\n\n───\n\n📌 **Departamentos Disponíveis:**\n• ❓ **Dúvidas:** Tire suas dúvidas gerais antes de comprar.\n• 📦 **Receber Produto:** Resgate de encomendas ou pedidos concluídos.\n• 🎨 **Comprar Artes:** Orçamentos e pedidos de artes personalizadas.\n\n───')
@@ -117,11 +118,13 @@ client.on('interactionCreate', async (interaction) => {
             const row = new ActionRowBuilder().addComponents(menu);
 
             await interaction.channel.send({ embeds: [embed], components: [row] });
-            return interaction.reply({ content: '✅ Painel de atendimento enviado com sucesso!', ephemeral: true });
+            return interaction.editReply({ content: '✅ Painel de atendimento enviado com sucesso!' });
         }
 
         // /vitrine
         if (commandName === 'vitrine') {
+            await interaction.deferReply();
+
             try {
                 await interaction.channel.permissionOverwrites.edit(interaction.guild.id, {
                     SendMessages: false,
@@ -138,24 +141,28 @@ client.on('interactionCreate', async (interaction) => {
                     .setColor(CORES.AZUL)
                     .setTimestamp();
 
-                await interaction.reply({ embeds: [embedVitrine] });
+                return interaction.editReply({ embeds: [embedVitrine] });
             } catch (err) {
                 console.error('Erro ao configurar vitrine:', err);
-                return interaction.reply({ content: '❌ Erro ao alterar as permissões do canal.', ephemeral: true });
+                return interaction.editReply({ content: '❌ Erro ao alterar as permissões do canal.' });
             }
         }
 
         // /falar
         if (commandName === 'falar') {
+            await interaction.deferReply({ ephemeral: true });
+
             const msg = options.getString('mensagem').replace(/\\n/g, '\n');
             const canal = options.getChannel('canal') || interaction.channel;
 
             await canal.send({ content: msg });
-            return interaction.reply({ content: `✅ Mensagem enviada em ${canal}`, ephemeral: true });
+            return interaction.editReply({ content: `✅ Mensagem enviada em ${canal}` });
         }
 
         // /embed
         if (commandName === 'embed') {
+            await interaction.deferReply({ ephemeral: true });
+
             const titulo = options.getString('titulo');
             const descricao = options.getString('descricao').replace(/\\n/g, '\n');
             const cor = options.getString('cor') || CORES.PADRAO;
@@ -168,7 +175,7 @@ client.on('interactionCreate', async (interaction) => {
                 .setTimestamp();
 
             await canal.send({ embeds: [embed] });
-            return interaction.reply({ content: `✅ Embed enviada em ${canal}`, ephemeral: true });
+            return interaction.editReply({ content: `✅ Embed enviada em ${canal}` });
         }
     }
 
@@ -221,7 +228,6 @@ client.on('interactionCreate', async (interaction) => {
                 .setStyle(ButtonStyle.Danger)
                 .setEmoji('🔒');
 
-            // Select Menu para a Staff definir qual cargo vai atender o ticket
             const roleSelect = new RoleSelectMenuBuilder()
                 .setCustomId('configurar_cargo_ticket')
                 .setPlaceholder('⚙️ Staff: Selecione o cargo para dar acesso a este ticket...');
@@ -245,12 +251,14 @@ client.on('interactionCreate', async (interaction) => {
 
     // ==================== 3. CONFIGURAR CARGO STAFF NO TICKET ====================
     if (interaction.isRoleSelectMenu() && interaction.customId === 'configurar_cargo_ticket') {
-        const cargoId = interaction.values[0];
-        const cargo = interaction.guild.roles.cache.get(cargoId);
-
         if (!interaction.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
             return interaction.reply({ content: '❌ Apenas membros da Staff podem definir o cargo de atendimento!', ephemeral: true });
         }
+
+        await interaction.deferReply({ ephemeral: true });
+
+        const cargoId = interaction.values[0];
+        const cargo = interaction.guild.roles.cache.get(cargoId);
 
         try {
             await interaction.channel.permissionOverwrites.edit(cargoId, {
@@ -259,10 +267,10 @@ client.on('interactionCreate', async (interaction) => {
                 AttachFiles: true
             });
 
-            await interaction.reply({ content: `✅ O cargo ${cargo} recebeu acesso a este ticket!`, ephemeral: false });
+            await interaction.editReply({ content: `✅ O cargo ${cargo} recebeu acesso a este ticket!` });
         } catch (err) {
             console.error('Erro ao adicionar cargo ao ticket:', err);
-            await interaction.reply({ content: '❌ Erro ao conceder permissão ao cargo selecionado.', ephemeral: true });
+            await interaction.editReply({ content: '❌ Erro ao conceder permissão ao cargo selecionado.' });
         }
     }
 
